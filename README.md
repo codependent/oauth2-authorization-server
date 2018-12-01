@@ -1,6 +1,6 @@
 # Spring Boot 2 Oauth2 Authorization Server with jwt tokens
 
-## Intructions to generate a keypair
+## Certificate configuration
 Keypair generation:
 `keytool -genkeypair -alias jwtcert -keyalg RSA  -keypass mypass  -keystore authorization-server.jks  -storepass mypass`
 
