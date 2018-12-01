@@ -13,4 +13,7 @@ Export public certificate:
 Token request: 
 `http://localhost:8080/oauth/authorize?client_id=front-app&redirect_uri=http://localhost/tonr2/sparklr/photos&response_type=token&scope=operate&state=g72OJm`
 
+Retrieve signing cert from server:
+`http://localhost:8080/oauth/token_key`
+
 
