@@ -1,5 +1,9 @@
 package com.codependent.oauth2.authorizationserver;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -12,8 +16,19 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultMatcher;
+import sun.misc.BASE64Decoder;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,36 +50,74 @@ public class AuthorizationServerApplicationTests {
     @Test
     public void shouldReturnValidJwtToken() throws Exception {
 
+        final String[] accessToken = executeImplicitFlow("operate");
+
+        Assert.assertEquals("access_token", accessToken[0]);
+
+        PublicKey pk = readPublicKey();
+        final Algorithm algorithm = Algorithm.RSA256((RSAPublicKey) pk, null);
+        final DecodedJWT decodedJWT = JWT.decode(accessToken[1]);
+        algorithm.verify(decodedJWT);
+    }
+
+    @Test
+    public void shouldFailWithInvalidScope() throws Exception {
+
+        final String[] accessToken = executeImplicitFlow("admin");
+
+        Assert.assertEquals("error", accessToken[0]);
+        Assert.assertEquals("invalid_scope", accessToken[1]);
+
+    }
+
+    private String[] executeImplicitFlow(String scope) throws Exception {
         final MockHttpSession session = new MockHttpSession();
-        String clientId = "front-app";
-        String redirectUri = "http://localhost/tonr2/sparklr/photos";
-        String responseType = "token";
-        String scope = "operate";
-        String state = "g720Jm";
 
-        final MvcResult result = this.mvc.perform(get(String.format(AUTH_PATH, clientId, redirectUri, responseType, scope, state))
-                .session(session))
-                .andExpect(status().isFound())
-                .andReturn();
-
-        System.out.println(result.getResponse().getHeaderNames());
+        final MvcResult result = getTokenUnauthorized(session, scope);
         final String location = result.getResponse().getHeader("Location");
+
         Assert.assertEquals("http://localhost/login", location);
 
 
-        final MvcResult loginPageResult = mvc.perform(get(location)
-                .session(session))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        System.out.println(result.getResponse().getHeaderNames());
+        final MvcResult loginPageResult = getLocation(session, location, status().isOk());
         final String loginPageContent = loginPageResult.getResponse().getContentAsString();
-        final Matcher matcher = CSRF_INPUT_REGEXP.matcher(loginPageContent);
-        matcher.find();
-        final String csrf = matcher.group(1);
+        final String csrf = extractCsrf(loginPageContent);
+        final MvcResult resultPostLogin = loginPost(session, csrf);
+        final String locationPostLogin = resultPostLogin.getResponse().getHeader("Location");
+
+        Assert.assertTrue("http://localhost/login", locationPostLogin.contains("/oauth/authorize"));
+
+        final MvcResult authorizeResult = getLocation(session, locationPostLogin, status().isFound());
+        final String authorizedLocation = authorizeResult.getResponse().getHeader("Location");
+        URL authorizedUrl = new URL(authorizedLocation);
+        final String fragment = authorizedUrl.getRef();
+        final String[] fragments = fragment.split("&");
+        return fragments[0].split("=");
+    }
 
 
-        final MvcResult resultPostLogin = mvc.perform(post("http://localhost/login")
+
+    private MvcResult getTokenUnauthorized(MockHttpSession session, String scope) throws Exception {
+        String clientId = "front-app";
+        String redirectUri = "http://localhost/tonr2/sparklr/photos";
+        String responseType = "token";
+        String state = "g720Jm";
+
+        return this.mvc.perform(get(String.format(AUTH_PATH, clientId, redirectUri, responseType, scope, state))
+                .session(session))
+                .andExpect(status().isFound())
+                .andReturn();
+    }
+
+    private MvcResult getLocation(MockHttpSession session, String location, ResultMatcher expectedStatus) throws Exception {
+        return mvc.perform(get(location)
+                .session(session))
+                .andExpect(expectedStatus)
+                .andReturn();
+    }
+
+    private MvcResult loginPost(MockHttpSession session, String csrf) throws Exception {
+        return mvc.perform(post("http://localhost/login")
                 .session(session)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
                 .param("_csrf", csrf)
@@ -73,26 +126,30 @@ public class AuthorizationServerApplicationTests {
                 .andExpect(status().isFound())
                 .andReturn();
 
-        final String locationPostLogin = resultPostLogin.getResponse().getHeader("Location");
-        Assert.assertTrue("http://localhost/login", locationPostLogin.contains("/oauth/authorize"));
-
-        final MvcResult authorizeResult = mvc.perform(get(locationPostLogin)
-                .session(session))
-                .andExpect(status().isFound())
-                .andReturn();
-
-        System.out.println(authorizeResult.getResponse().getHeaderNames());
-        final String authorizedLocation = authorizeResult.getResponse().getHeader("Location");
-
-        URL authorizedUrl = new URL(authorizedLocation);
-        final String fragment = authorizedUrl.getRef();
-        final String[] fragments = fragment.split("&");
-
-        final String[] accessToken = fragments[0].split("=");
-        Assert.assertEquals("access_token", accessToken[0]);
-        Assert.assertNotNull(accessToken[1]);
-
     }
 
+    private String extractCsrf(String body) {
+        final Matcher matcher = CSRF_INPUT_REGEXP.matcher(body);
+        if (matcher.find()) {
+            return matcher.group(1);
+        } else {
+            return null;
+        }
+    }
 
+    private PublicKey readPublicKey() throws InvalidKeySpecException, IOException, NoSuchAlgorithmException {
+
+        final InputStream pkIs = Thread.currentThread().getContextClassLoader().getResourceAsStream("public.crt");
+        final String pkString = IOUtils.toString(pkIs, Charset.forName("UTF-8"));
+
+        String publicKeyPEM = pkString.replace("-----BEGIN PUBLIC KEY-----\n", "");
+        publicKeyPEM = publicKeyPEM.replace("-----END PUBLIC KEY-----", "");
+
+        BASE64Decoder b64 = new BASE64Decoder();
+        byte[] decoded = b64.decodeBuffer(publicKeyPEM);
+
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        return kf.generatePublic(spec);
+    }
 }

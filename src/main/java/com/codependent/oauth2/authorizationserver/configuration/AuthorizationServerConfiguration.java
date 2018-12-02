@@ -18,7 +18,7 @@ import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFacto
 @EnableAuthorizationServer
 public class AuthorizationServerConfiguration extends AuthorizationServerConfigurerAdapter {
 
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
 
     public AuthorizationServerConfiguration(AuthenticationManager authenticationManager) {
         this.authenticationManager = authenticationManager;
@@ -48,13 +48,13 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
     }
 
     @Override
-    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+    public void configure(AuthorizationServerEndpointsConfigurer endpoints) {
         endpoints.authenticationManager(this.authenticationManager);
         endpoints.accessTokenConverter(accessTokenConverter());
     }
 
     @Override
-    public void configure(AuthorizationServerSecurityConfigurer security) throws Exception {
+    public void configure(AuthorizationServerSecurityConfigurer security) {
         //security.checkTokenAccess('hasRole("ROLE_RESOURCE_PROVIDER")')
         //security.checkTokenAccess("isAuthenticated()");;
         security.tokenKeyAccess("isAnonymous()");
