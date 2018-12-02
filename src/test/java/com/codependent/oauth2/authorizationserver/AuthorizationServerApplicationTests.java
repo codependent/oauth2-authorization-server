@@ -1,7 +1,9 @@
 package com.codependent.oauth2.authorizationserver;
 
 import com.auth0.jwt.JWT;
+import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
@@ -56,8 +58,8 @@ public class AuthorizationServerApplicationTests {
 
         PublicKey pk = readPublicKey();
         final Algorithm algorithm = Algorithm.RSA256((RSAPublicKey) pk, null);
-        final DecodedJWT decodedJWT = JWT.decode(accessToken[1]);
-        algorithm.verify(decodedJWT);
+        JWTVerifier verifier = JWT.require(algorithm).build(); //Reusable verifier instance
+        verifier.verify(accessToken[1]);
     }
 
     @Test
