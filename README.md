@@ -1,5 +1,7 @@
 # Spring Boot 2 Oauth2 Authorization Server with jwt tokens
 
+[![Build Status](https://semaphoreci.com/api/v1/codependent/oauth2-authorization-server/branches/master/badge.svg)](https://semaphoreci.com/codependent/oauth2-authorization-server)
+
 ## Certificate configuration
 Keypair generation:
 `keytool -genkeypair -alias jwtcert -keyalg RSA  -keypass mypass  -keystore authorization-server.jks  -storepass mypass`
