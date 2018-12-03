@@ -14,14 +14,18 @@ import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenCo
 import org.springframework.security.oauth2.provider.token.store.JwtTokenStore;
 import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFactory;
 
+import javax.sql.DataSource;
+
 @Configuration
 @EnableAuthorizationServer
 public class AuthorizationServerConfiguration extends AuthorizationServerConfigurerAdapter {
 
     private final AuthenticationManager authenticationManager;
+    private final DataSource dataSource;
 
-    public AuthorizationServerConfiguration(AuthenticationManager authenticationManager) {
+    public AuthorizationServerConfiguration(AuthenticationManager authenticationManager, DataSource dataSource) {
         this.authenticationManager = authenticationManager;
+        this.dataSource = dataSource;
     }
 
     @Bean
@@ -62,6 +66,7 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
 
     @Override
     public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
+        clients.jdbc(dataSource);/*
         clients.inMemory()
                 .withClient("front-app")
                 .secret("front-app-secret")
@@ -70,7 +75,7 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
                 .redirectUris("http://localhost/tonr2/sparklr/photos")
                 .autoApprove(true)
                 .scopes("operate")
-                .accessTokenValiditySeconds(240);
+                .accessTokenValiditySeconds(240);*/
 
     }
 
